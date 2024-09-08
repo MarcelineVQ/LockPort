@@ -1,11 +1,15 @@
+local lockport_title = "|CFFB700B7L|CFFFF00FFo|CFFFF50FFc|CFFFF99FFk|CFFFFC4FFP|cffffffffort|r"
+
+-- LOCKPORT_HEADER = lockport_title
+BINDING_HEADER_LOCKPORT = lockport_title
+BINDING_NAME_SUMMON_KEY = "Summon next queue target"
+
 local LockPortOptions_DefaultSettings = {
 	whisper = true,
 	zone    = true,
 	shards  = true,
 	sound   = true,
 }
-
-local lockport_title = "|CFFB700B7L|CFFFF00FFo|CFFFF50FFc|CFFFF99FFk|CFFFFC4FFP|cffffffffort|r"
 
 local function LockPort_Initialize()
 	LockPortOptions = LockPortOptions or {}
@@ -45,7 +49,7 @@ function LockPort_EventFrame_OnEvent()
 	if event == "VARIABLES_LOADED" then
 		this:UnregisterEvent("VARIABLES_LOADED")
 		LockPort_Initialize()
-	elseif event == "CHAT_MSG_SAY" or event == "CHAT_MSG_RAID" or event == "CHAT_MSG_RAID_LEADER" or event == "CHAT_MSG_YELL" or event == "CHAT_MSG_WHISPER" then	
+	elseif event == "CHAT_MSG_SAY" or event == "CHAT_MSG_RAID" or event == "CHAT_MSG_RAID_LEADER" or event == "CHAT_MSG_YELL" or event == "CHAT_MSG_WHISPER" then
 		-- if (string.find(arg1, "^123") and UnitClass("player")~=arg2) then
 		if string.find(arg1, "^123") then
 			-- DEFAULT_CHAT_FRAME:AddMessage("CHAT_MSG")
@@ -210,6 +214,17 @@ function LockPort_NameListButton_OnClick(mouse_button)
 	LockPort_DoSummon(name,mouse_button)
 end
 
+function LockPort_DirectSummon()
+	if next(LockPortDB) then
+		LockPort_GetRaidMembers()
+		if LockPort_UnitIDDB and next(LockPort_UnitIDDB) then
+			LockPort_DoSummon(LockPort_UnitIDDB[1].rName,"LeftButton")
+		end
+	else
+		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : no names in queue to summon")
+	end
+end
+
 function LockPort_UpdateList()
 	LockPort_BrowseDB = {}
 	--only Update and show if Player is Warlock
@@ -281,14 +296,7 @@ function LockPort_SlashCommand(msg)
 		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9sound|r: toggles sound on summon request")
 		DEFAULT_CHAT_FRAME:AddMessage("To drag the frame use left mouse button")
 	elseif msg == "summon" then
-		if next(LockPortDB) then
-			LockPort_GetRaidMembers()
-			if LockPort_UnitIDDB and next(LockPort_UnitIDDB) then
-				LockPort_DoSummon(LockPort_UnitIDDB[1].rName,"LeftButton")
-			end
-		else
-			DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : no names in queue to summon")
-		end
+		LockPort_DirectSummon()
 	elseif msg == "show" then
 		for i, v in ipairs(LockPortDB) do
 			DEFAULT_CHAT_FRAME:AddMessage(tostring(v))

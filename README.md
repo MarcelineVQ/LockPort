@@ -14,7 +14,10 @@
 - CTRL + Left click to target the player.
 - Right click to remove.
 - If no player is on the list the frame is hidden again (type /lockport to manually show).
+
+## Utility:
 - Type `/lockport summon` to fulfill the next pending summmon request via chatwindow or macro.
+- Set a keybind to do the same in the keybinds menu.
 
 ## Options:
 
@@ -25,6 +28,7 @@
 - /lockport shards - Enables or Disables shard count message when you summon.
 - /lockport settings - Opens the settings window.
 - /lockport sound - Enables or Disables the sound on summon request.
+
 
 ## To Do:
 - Make setting to change what channel your summon messages get sent to.

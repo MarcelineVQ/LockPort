@@ -1,0 +1,3 @@
+<Bindings>
+	<Binding name="SUMMON_KEY" header="LOCKPORT">LockPort_DirectSummon();</Binding>
+</Bindings>
