@@ -1,58 +1,36 @@
 local LockPortOptions_DefaultSettings = {
 	whisper = true,
 	zone    = true,
-    shards  = true,
-    sound  = true,
+	shards  = true,
+	sound   = true,
 }
 
 local lockport_title = "|CFFB700B7L|CFFFF00FFo|CFFFF50FFc|CFFFF99FFk|CFFFFC4FFP|cffffffffort|r"
 
 local function LockPort_Initialize()
-	if not LockPortOptions  then
-		LockPortOptions = {}
-	end
+	LockPortOptions = LockPortOptions or {}
 	for i in LockPortOptions_DefaultSettings do
-		if LockPortOptions[i] == false then
-			LockPortOptions[i] = false
-		else
-			LockPortOptions[i] = LockPortOptions_DefaultSettings[i]
-		end
+		LockPortOptions[i] = (LockPortOptions[i] == nil and LockPortOptions_DefaultSettings[i]) or LockPortOptions[i]
 	end
-	if LockPortOptions["whisper"] == true then
-		WhisperCheckButton:SetChecked(true)
-	else
-		WhisperCheckButton:SetChecked(false)
-	end
-	if LockPortOptions["zone"] == true then
-		ZoneCheckButton:SetChecked(true)
-	else
-		ZoneCheckButton:SetChecked(false)
-	end
-	if LockPortOptions["shards"] == true then
-		ShardsCheckButton:SetChecked(true)
-	else
-		ShardsCheckButton:SetChecked(false)
-	end
-	if LockPortOptions["sound"] == true then
-		SoundCheckButton:SetChecked(true)
-	else
-		SoundCheckButton:SetChecked(false)
-	end
+
+	WhisperCheckButton:SetChecked(LockPortOptions["whisper"] or nil)
+	ZoneCheckButton:SetChecked(LockPortOptions["zone"] or nil)
+	ShardsCheckButton:SetChecked(LockPortOptions["shards"] or nil)
+	SoundCheckButton:SetChecked(LockPortOptions["sound"] or nil)
 end
 
 function LockPort_EventFrame_OnLoad()
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(lockport_title.." version %s by %s. Type /lockport to show.", GetAddOnMetadata("LockPort", "Version"), GetAddOnMetadata("LockPort", "Author")))
-    this:RegisterEvent("VARIABLES_LOADED")
-    this:RegisterEvent("CHAT_MSG_ADDON")
-    this:RegisterEvent("CHAT_MSG_RAID")
+	this:RegisterEvent("VARIABLES_LOADED")
+	this:RegisterEvent("CHAT_MSG_ADDON")
+	this:RegisterEvent("CHAT_MSG_RAID")
 	this:RegisterEvent("CHAT_MSG_RAID_LEADER")
-    this:RegisterEvent("CHAT_MSG_SAY")
-    this:RegisterEvent("CHAT_MSG_YELL")
-    this:RegisterEvent("CHAT_MSG_WHISPER")
-    -- Commands
+	this:RegisterEvent("CHAT_MSG_SAY")
+	this:RegisterEvent("CHAT_MSG_YELL")
+	this:RegisterEvent("CHAT_MSG_WHISPER")
+	-- Commands
 	SlashCmdList["LockPort"] = LockPort_SlashCommand
 	SLASH_LockPort1 = "/lockport"
-	SLASH_LockPort2 = "/gurky"
 	MSG_PREFIX_ADD		= "RSAdd"
 	MSG_PREFIX_REMOVE	= "RSRemove"
 	LockPortDB = {}
@@ -161,17 +139,6 @@ function LockPort_DoSummon(name,button)
 
 					TargetUnit(UnitID)
 
-					-- if (has_eviltwin) then
-					-- 	whisper_eviltwin_message = "Can't summon you because of Evil Twin Debuff, you need either to die or to run by yourself"
-					-- 	SendChatMessage(whisper_eviltwin_message, "WHISPER", nil, name)
-					-- 	DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : <" .. name .. "> has |cffff0000Evil Twin|r !")
-					-- 	for i, v in ipairs (LockPortDB) do
-					-- 		if v == name then
-					-- 			SendAddonMessage(MSG_PREFIX_REMOVE, name, "RAID")
-					-- 			table.remove(LockPortDB, i)
-					-- 		end
-					-- 	end
-					-- elseif (Check_TargetInRange()) then
 					if (Check_TargetInRange()) then
 						DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : <" .. name .. "> has been summoned already (|cffff0000in range|r)")
 						-- Remove the already summoned target
@@ -327,58 +294,17 @@ function LockPort_SlashCommand(msg)
 			DEFAULT_CHAT_FRAME:AddMessage(tostring(v))
 		end
 	elseif msg == "zone" then
-		if LockPortOptions["zone"] == true then
-			LockPortOptions["zone"] = false
-			ZoneCheckButton:SetChecked(false)
-			DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - zoneinfo: |cffff0000disabled|r")
-		elseif LockPortOptions["zone"] == false then
-			LockPortOptions["zone"] = true
-			ZoneCheckButton:SetChecked(true)
-			DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - zoneinfo: |cff00ff00enabled|r")
-		end
+		ZoneCheckButton:Click()
 	elseif msg == "whisper" then
-		if LockPortOptions["whisper"] == true then
-			LockPortOptions["whisper"] = false
-			WhisperCheckButton:SetChecked(false)
-			DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - whisper: |cffff0000disabled|r")
-		elseif LockPortOptions["whisper"] == false then
-			LockPortOptions["whisper"] = true
-			WhisperCheckButton:SetChecked(true)
-			DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - whisper: |cff00ff00enabled|r")
-		end
-	 elseif msg == "shards" then
-		if LockPortOptions["shards"] == true then
-	       LockPortOptions["shards"] = false
-		   ShardsCheckButton:SetChecked(false)
-	       DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - shards: |cffff0000disabled|r")
-		elseif LockPortOptions["shards"] == false then
-	       LockPortOptions["shards"] = true
-		   ShardsCheckButton:SetChecked(true)
-	       DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - shards: |cff00ff00enabled|r")
-		end
-	 elseif msg == "sound" then
-		if LockPortOptions["sound"] == true then
-	       LockPortOptions["sound"] = false
-		   SoundCheckButton:SetChecked(false)
-	       DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - sound: |cffff0000disabled|r")
-		elseif LockPortOptions["sound"] == false then
-	       LockPortOptions["sound"] = true
-		   SoundCheckButton:SetChecked(true)
-	       DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - sound: |cff00ff00enabled|r")
-		end
-		elseif msg == "settings" then
-		if LockPort_SettingsFrame:IsVisible() then
-			LockPort_SettingsFrame:Hide()
-		else
-			LockPort_SettingsFrame:Show()
-		end
+		WhisperCheckButton:Click()
+	elseif msg == "shards" then
+		ShardsCheckButton:Click()
+	elseif msg == "sound" then
+		SoundCheckButton:Click()
+	elseif msg == "settings" then
+		LockPort_Settings_Toggle()
 	else
-		if LockPort_RequestFrame:IsVisible() then
-			LockPort_RequestFrame:Hide()
-		else
-			LockPort_UpdateList()
-			ShowUIPanel(LockPort_RequestFrame, 1)
-		end
+		LockPort_RequestFrame_Toggle()
 	end
 end
 
@@ -411,19 +337,10 @@ function LockPort_GetRaidMembers()
 	end
 end
 
--- FindItem function from SuperMacro to get the total number of Soul Shards
 function FindItem(item)
 	if (not item) then return end
 	item = string.lower(ItemLinkToName(item))
 	local link
-	for i = 1,23 do
-       link = GetInventoryItemLink("player",i)
-       if (link) then
-           if (item == string.lower(ItemLinkToName(link))) then
-                return i, nil, GetInventoryItemTexture('player', i), GetInventoryItemCount('player', i)
-           end
-       end
-	end
 	local count, bag, slot, texture
 	local totalcount = 0
 	for i = 0,NUM_BAG_FRAMES do
@@ -468,112 +385,39 @@ function LockPort_Settings_Toggle()
 	end
 end
 
-function WhisperCheckButton_OnClick()
-	if WhisperCheckButton:GetChecked() then
-		LockPortOptions["whisper"] = true
-		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - whisper: |cff00ff00enabled|r")
-	elseif not WhisperCheckButton:GetChecked() then
-		LockPortOptions["whisper"] = false
-	    DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - whisper: |cffff0000disabled|r")
+function LockPort_RequestFrame_Toggle(frame)
+	if LockPort_RequestFrame:IsVisible() then
+		LockPort_RequestFrame:Hide()
+	else
+		LockPort_UpdateList()
+		ShowUIPanel(LockPort_RequestFrame, 1)
 	end
+end
+
+local function boolean(bool)
+	return bool and true or false
+end
+
+local function enabled_disabled(bool)
+	return (bool and "|cff00ff00enabled|r" or "|cffff0000disabled|r")
+end
+
+function WhisperCheckButton_OnClick()
+	LockPortOptions["whisper"] = boolean(WhisperCheckButton:GetChecked())
+	DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - whisper: "..enabled_disabled(LockPortOptions["whisper"]))
 end
 
 function ZoneCheckButton_OnClick()
-	if ZoneCheckButton:GetChecked() then
-		LockPortOptions["zone"] = true
-		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - zoneinfo: |cff00ff00enabled|r")
-	elseif not ZoneCheckButton:GetChecked() then
-		LockPortOptions["zone"] = false
-		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - zoneinfo: |cffff0000disabled|r")
-	end
+		LockPortOptions["zone"] = boolean(ZoneCheckButton:GetChecked())
+		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - zoneinfo: "..enabled_disabled(LockPortOptions["zone"]))
 end
 
 function ShardsCheckButton_OnClick()
-	if ShardsCheckButton:GetChecked() then
-		LockPortOptions["shards"] = true
-		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - shards: |cff00ff00enabled|r")
-	elseif not ShardsCheckButton:GetChecked() then
-		LockPortOptions["shards"] = false
-	    DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - shards: |cffff0000disabled|r")
-	end
+	LockPortOptions["shards"] = boolean(ShardsCheckButton:GetChecked())
+	DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - shards: "..enabled_disabled(LockPortOptions["shards"]))
 end
 
 function SoundCheckButton_OnClick()
-	if SoundCheckButton:GetChecked() then
-		LockPortOptions["sound"] = true
-		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - sound: |cff00ff00enabled|r")
-	elseif not SoundCheckButton:GetChecked() then
-		LockPortOptions["sound"] = false
-	    DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - sound: |cffff0000disabled|r")
-	end
+	LockPortOptions["sound"] = boolean(SoundCheckButton:GetChecked())
+	DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - sound: "..enabled_disabled(LockPortOptions["sound"]))
 end
-
---pfUI.api.strsplit
--- function hcstrsplit(delimiter, subject)
---   if not subject then return nil end
---   local delimiter, fields = delimiter or ":", {}
---   local pattern = string.format("([^%s]+)", delimiter)
---   string.gsub(subject, pattern, function(c) fields[table.getn(fields)+1] = c end)
---   return unpack(fields)
--- end
-
--- --Update announcing code taken from pfUI
--- local major, minor, fix = hcstrsplit(".", tostring(GetAddOnMetadata("LockPort", "Version")))
-
--- local alreadyshown = false
--- local localversion  = tonumber(major*10000 + minor*100 + fix)
--- local remoteversion = tonumber(lpupdateavailable) or 0
--- local loginchannels = { "BATTLEGROUND", "RAID", "GUILD", "PARTY" }
--- local groupchannels = { "BATTLEGROUND", "RAID", "PARTY" }
-
-
--- lpupdater = CreateFrame("Frame")
--- lpupdater:RegisterEvent("CHAT_MSG_ADDON")
--- lpupdater:RegisterEvent("PLAYER_ENTERING_WORLD")
--- lpupdater:RegisterEvent("PARTY_MEMBERS_CHANGED")
--- lpupdater:SetScript("OnEvent", function()
--- 	if event == "CHAT_MSG_ADDON" and arg1 == "lp" then
--- 		local v, remoteversion = hcstrsplit(":", arg2)
--- 		local remoteversion = tonumber(remoteversion)
--- 		if v == "VERSION" and remoteversion then
--- 			if remoteversion > localversion then
--- 				lpupdateavailable = remoteversion
--- 				if not alreadyshown then
--- 					DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." New version available! https://github.com/Gurky-Turtle/LockPort")
--- 					alreadyshown = true
--- 				end
--- 			end
--- 		end
--- 		--This is a little check that I can use to see if people are actually using the addon.
--- 		if v == "PING?" then
--- 			for _, chan in pairs(loginchannels) do
--- 				SendAddonMessage("lp", "PONG!:"..GetAddOnMetadata("LockPort", "Version"), chan)
--- 			end
--- 		end
--- 		if v == "PONG!" then
--- 			--print(arg1 .." "..arg2.." "..arg3.." "..arg4)
--- 		end
--- 	end
-
--- 	if event == "PARTY_MEMBERS_CHANGED" then
--- 		local groupsize = GetNumRaidMembers() > 0 and GetNumRaidMembers() or GetNumPartyMembers() > 0 and GetNumPartyMembers() or 0
--- 		if ( this.group or 0 ) < groupsize then
--- 			for _, chan in pairs(groupchannels) do
--- 				SendAddonMessage("lp", "VERSION:" .. localversion, chan)
--- 			end
--- 		end
--- 		this.group = groupsize
--- 	end
-
---     if event == "PLAYER_ENTERING_WORLD" then
---       if not alreadyshown and localversion < remoteversion then
---         DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." New version available! https://github.com/Gurky-Turtle/LockPort")
---         lpupdateavailable = localversion
---         alreadyshown = true
---       end
-
---       for _, chan in pairs(loginchannels) do
---         SendAddonMessage("lp", "VERSION:" .. localversion, chan)
---       end
---     end
---   end)
