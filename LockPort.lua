@@ -9,6 +9,8 @@ local LockPortOptions_DefaultSettings = {
 	zone    = true,
 	shards  = true,
 	sound   = true,
+	popup   = true,
+	say     = true,
 }
 
 local function LockPort_Initialize()
@@ -21,17 +23,20 @@ local function LockPort_Initialize()
 	ZoneCheckButton:SetChecked(LockPortOptions["zone"] or nil)
 	ShardsCheckButton:SetChecked(LockPortOptions["shards"] or nil)
 	SoundCheckButton:SetChecked(LockPortOptions["sound"] or nil)
+	PopupCheckButton:SetChecked(LockPortOptions["popup"] or nil)
+	SayCheckButton:SetChecked(LockPortOptions["say"] or nil)
 end
 
 function LockPort_EventFrame_OnLoad()
 	DEFAULT_CHAT_FRAME:AddMessage(string.format(lockport_title.." version %s by %s. Type /lockport to show.", GetAddOnMetadata("LockPort", "Version"), GetAddOnMetadata("LockPort", "Author")))
 	this:RegisterEvent("VARIABLES_LOADED")
 	this:RegisterEvent("CHAT_MSG_ADDON")
-	this:RegisterEvent("CHAT_MSG_RAID")
-	this:RegisterEvent("CHAT_MSG_RAID_LEADER")
+	this:RegisterEvent("CHAT_MSG_WHISPER")
 	this:RegisterEvent("CHAT_MSG_SAY")
 	this:RegisterEvent("CHAT_MSG_YELL")
-	this:RegisterEvent("CHAT_MSG_WHISPER")
+	this:RegisterEvent("CHAT_MSG_PARTY")
+	this:RegisterEvent("CHAT_MSG_RAID")
+	this:RegisterEvent("CHAT_MSG_RAID_LEADER")
 	-- Commands
 	SlashCmdList["LockPort"] = LockPort_SlashCommand
 	SLASH_LockPort1 = "/lockport"
@@ -49,9 +54,9 @@ function LockPort_EventFrame_OnEvent()
 	if event == "VARIABLES_LOADED" then
 		this:UnregisterEvent("VARIABLES_LOADED")
 		LockPort_Initialize()
-	elseif event == "CHAT_MSG_SAY" or event == "CHAT_MSG_RAID" or event == "CHAT_MSG_RAID_LEADER" or event == "CHAT_MSG_YELL" or event == "CHAT_MSG_WHISPER" then
+	elseif event == "CHAT_MSG_SAY" or event == "CHAT_MSG_PARTY" or event == "CHAT_MSG_RAID" or event == "CHAT_MSG_RAID_LEADER" or event == "CHAT_MSG_YELL" or event == "CHAT_MSG_WHISPER" then
 		-- if (string.find(arg1, "^123") and UnitClass("player")~=arg2) then
-		if string.find(arg1, "^123") then
+		if string.find(arg1, "^%s*123") then
 			-- DEFAULT_CHAT_FRAME:AddMessage("CHAT_MSG")
 			SendAddonMessage(MSG_PREFIX_ADD, arg2, "RAID")
 		end
@@ -61,6 +66,9 @@ function LockPort_EventFrame_OnEvent()
 			if not LockPort_hasValue(LockPortDB, arg2) and UnitName("player")~=arg2 and UnitClass("player") == "Warlock" then
 				table.insert(LockPortDB, arg2)
 				LockPort_UpdateList()
+				if not LockPortOptions.popup then
+					DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : " .. arg2 .. " added to summon queue.")
+				end
 				if LockPortOptions.sound then
 					PlaySoundFile("Sound\\Creature\\Necromancer\\NecromancerReady1.wav")
 				end
@@ -93,28 +101,26 @@ function LockPort_DoSummon(name,button)
 	local message, base_message, whisper_message, base_whisper_message, whisper_eviltwin_message, zone_message, subzone_message = ""
 	local bag,slot,texture,count = FindItem("Soul Shard")
 	local eviltwin_debuff = "Spell_Shadow_Charm"
-	local has_eviltwin = false
 
+	local units = LockPort_GetGroupMembers()
 	if button  == "LeftButton" and IsControlKeyDown() then
-		LockPort_GetRaidMembers()
-		if LockPort_UnitIDDB then
-			for i, v in ipairs (LockPort_UnitIDDB) do
+		if units then
+			for i, v in ipairs(units) do
 				if v.rName == name then
-					UnitID = "raid"..v.rIndex
+					TargetUnit(v.rUnit)
+					break
 				end
-			end
-			if UnitID then
-				TargetUnit(UnitID)
 			end
 		else
 			DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : no raid found")
 		end
 	elseif button == "LeftButton" and not IsControlKeyDown() then
-		LockPort_GetRaidMembers()
-		if LockPort_UnitIDDB then
-			for i, v in ipairs (LockPort_UnitIDDB) do
+		local UnitID = nil
+		if units then
+			for i, v in ipairs(units) do
 				if v.rName == name then
-					UnitID = "raid"..v.rIndex
+					UnitID = v.rUnit
+					break
 				end
 			end
 			if UnitID then
@@ -130,16 +136,6 @@ function LockPort_DoSummon(name,button)
 					shards_message          = " [" .. count .. " shards left]"
 					message                 = base_message
 					whisper_message         = base_whisper_message
-
-					-- Evil Twin check
-					for i=1,16 do
-						s=UnitDebuff("target", i)
-						if(s) then
-							if (strfind(strlower(s), strlower(eviltwin_debuff))) then
-						        has_eviltwin = true
-							end
-						end
-					end
 
 					TargetUnit(UnitID)
 
@@ -170,7 +166,9 @@ function LockPort_DoSummon(name,button)
 						if LockPortOptions.shards then
 					    	message = message .. shards_message
 						end
-						SendChatMessage(message, "SAY")
+						if LockPortOptions.say then
+							SendChatMessage(message, "SAY")
+						end
 
 						-- Send Whisper Message
 						if LockPortOptions.whisper then
@@ -216,68 +214,60 @@ end
 
 function LockPort_DirectSummon()
 	if next(LockPortDB) then
-		LockPort_GetRaidMembers()
-		if LockPort_UnitIDDB and next(LockPort_UnitIDDB) then
-			LockPort_DoSummon(LockPort_UnitIDDB[1].rName,"LeftButton")
+		local units = LockPort_GetGroupMembers()
+		if units then
+			LockPort_DoSummon(units[1].rName,"LeftButton")
 		end
 	else
-		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : no names in queue to summon")
+		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : No names in queue to summon.")
 	end
 end
 
 function LockPort_UpdateList()
-	LockPort_BrowseDB = {}
 	--only Update and show if Player is Warlock
-	 if (UnitClass("player") == "Warlock") then
-		--get raid member data
-		local raidnum = GetNumRaidMembers()
-		if (raidnum > 0) then
-			for raidmember = 1, raidnum do
-				local rName, rRank, rSubgroup, rLevel, rClass = GetRaidRosterInfo(raidmember)
-				--check raid data for LockPort data
-				for i, v in ipairs (LockPortDB) do 
-					--if player is found fill BrowseDB
-					if v == rName then
-						LockPort_BrowseDB[i] = {}
-						LockPort_BrowseDB[i].rName = rName
-						LockPort_BrowseDB[i].rClass = rClass
-						LockPort_BrowseDB[i].rIndex = i
-						if rClass == "Warlock" or rName == "Bennylava" then
-							LockPort_BrowseDB[i].rVIP = true
-						else
-							LockPort_BrowseDB[i].rVIP = false
-						end
-					end
-				end
-			end
+	if not (UnitClass("player") == "Warlock") then return end
+	LockPort_BrowseDB = {}
 
-			--sort warlocks first
-			table.sort(LockPort_BrowseDB, function(a,b) return tostring(a.rVIP) > tostring(b.rVIP) end)
-		end
-		
-		for i=1,10 do
-			if LockPort_BrowseDB[i] then
-				getglobal("LockPort_NameList"..i.."TextName"):SetText(LockPort_BrowseDB[i].rName)
-
-				-- set class color
-				local class = string.upper(LockPort_BrowseDB[i].rClass)
-				local c = LockPort_GetClassColour(class)
-				getglobal("LockPort_NameList"..i.."TextName"):SetTextColor(c.r, c.g, c.b, 1)				
-
-				getglobal("LockPort_NameList"..i):Show()
-			else
-				getglobal("LockPort_NameList"..i):Hide()
+	--get raid member data
+	local units = LockPort_GetGroupMembers()
+	for _,unit in ipairs(units) do
+		for i, v in ipairs(LockPortDB) do
+			if v == unit.rName then
+				local r = {
+					rName = unit.rName,
+					rClass = unit.rClass,
+					rIndex = unit.rIndex,
+					rVIP = (unit.rClass == "Warlock"),
+				}
+				table.insert(LockPort_BrowseDB, r)
 			end
 		end
-		
-		if not LockPortDB[1] then
-			if LockPort_RequestFrame:IsVisible() then
-				LockPort_RequestFrame:Hide()
-			end
+	end
+	--sort warlocks first
+	table.sort(LockPort_BrowseDB, function(a,b) return tostring(a.rVIP) > tostring(b.rVIP) end)
+
+	for i=1,10 do
+		if LockPort_BrowseDB[i] then
+			getglobal("LockPort_NameList"..i.."TextName"):SetText(LockPort_BrowseDB[i].rName)
+
+			-- set class color
+			local class = string.upper(LockPort_BrowseDB[i].rClass)
+			local c = LockPort_GetClassColour(class)
+			getglobal("LockPort_NameList"..i.."TextName"):SetTextColor(c.r, c.g, c.b, 1)
+
+			getglobal("LockPort_NameList"..i):Show()
 		else
-			ShowUIPanel(LockPort_RequestFrame, 1)
+			getglobal("LockPort_NameList"..i):Hide()
 		end
-	end	
+	end
+
+	if not LockPortDB[1] then
+		if LockPort_RequestFrame:IsVisible() then
+			LockPort_RequestFrame:Hide()
+		end
+	elseif LockPortOptions.popup then
+		ShowUIPanel(LockPort_RequestFrame, 1)
+	end
 end
 
 --Slash Handler
@@ -285,7 +275,7 @@ end
 function LockPort_SlashCommand(msg)
 	if msg == "help" then
 		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." usage:")
-		DEFAULT_CHAT_FRAME:AddMessage("/lockport { help  | summon | show | zone | whisper | shards | settings | sound }")
+		DEFAULT_CHAT_FRAME:AddMessage("/lockport { help  | summon | show | zone | whisper | shards | settings | sound | popup | say }")
 		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9help|r: prints out this help")
 		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9summon|r: summons the next player")
 		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9show|r: shows the current summon list")
@@ -294,6 +284,8 @@ function LockPort_SlashCommand(msg)
 		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9shards|r: toggles shards count when you summon")
 		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9settings|r: shows the settings window")
 		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9sound|r: toggles sound on summon request")
+		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9popup|r: toggles summon window showing when a request is made")
+		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9say|r: toggles announcing the summmon in /say")
 		DEFAULT_CHAT_FRAME:AddMessage("To drag the frame use left mouse button")
 	elseif msg == "summon" then
 		LockPort_DirectSummon()
@@ -309,6 +301,10 @@ function LockPort_SlashCommand(msg)
 		ShardsCheckButton:Click()
 	elseif msg == "sound" then
 		SoundCheckButton:Click()
+	elseif msg == "popup" then
+		PopupCheckButton:Click()
+	elseif msg == "say" then
+		SayCheckButton:Click()
 	elseif msg == "settings" then
 		LockPort_Settings_Toggle()
 	else
@@ -327,21 +323,21 @@ function LockPort_GetClassColour(class)
 	return {r = 0.5, g = 0.5, b = 1}
 end
 
---raid member
-function LockPort_GetRaidMembers()
-    local raidnum = GetNumRaidMembers()
-    if (raidnum > 0) then
-		LockPort_UnitIDDB = {}
-		for i = 1, raidnum do
-		    local rName, rRank, rSubgroup, rLevel, rClass = GetRaidRosterInfo(i)
-			LockPort_UnitIDDB[i] = {}
-			if (not rName) then 
-			    rName = "unknown"..i
-			end
-			LockPort_UnitIDDB[i].rName    = rName
-			LockPort_UnitIDDB[i].rClass   = rClass
-			LockPort_UnitIDDB[i].rIndex   = i
-	    end
+function LockPort_GetGroupMembers()
+	local partynum = GetNumPartyMembers()
+	local raidnum = GetNumRaidMembers()
+	local israid = raidnum > 0
+	local groupType = israid and "raid" or "party"
+	if (raidnum + partynum > 0) then
+		local t = {}
+		for i = 1, (israid and raidnum or partynum) do
+			t[i] = {}
+			t[i].rName  = UnitName(groupType..i)
+			t[i].rClass = UnitClass(groupType..i)
+			t[i].rIndex = i
+			t[i].rUnit  = groupType..i
+		end
+		return t
 	end
 end
 
@@ -403,7 +399,7 @@ function LockPort_RequestFrame_Toggle(frame)
 end
 
 local function boolean(bool)
-	return bool and true or false
+	return (bool and true or false)
 end
 
 local function enabled_disabled(bool)
@@ -429,3 +425,21 @@ function SoundCheckButton_OnClick()
 	LockPortOptions["sound"] = boolean(SoundCheckButton:GetChecked())
 	DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - sound: "..enabled_disabled(LockPortOptions["sound"]))
 end
+
+function PopupCheckButton_OnClick()
+	LockPortOptions["popup"] = boolean(PopupCheckButton:GetChecked())
+	DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - popup: "..enabled_disabled(LockPortOptions["popup"]))
+end
+
+function SayCheckButton_OnClick()
+	LockPortOptions["say"] = boolean(SayCheckButton:GetChecked())
+	DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - say: "..enabled_disabled(LockPortOptions["say"]))
+end
+
+-- LockPort_CheckButtons = {}
+-- for setting,_ in pairs(LockPortOptions_DefaultSettings) do
+-- 	LockPort_CheckButtons[setting] = function ()
+-- 		LockPortOptions[setting] = boolean(SayCheckButton:GetChecked())
+-- 		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - "..setting..": "..enabled_disabled(LockPortOptions[setting]))
+-- 	end
+-- end
