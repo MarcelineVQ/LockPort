@@ -23,12 +23,6 @@
 - /lockport help - Shows commands in chat.
 - /lockport show - Shows the current summon list.
 - /lockport settings - Opens the settings window.
-- /lockport zone - Enables or Disables including Zone information in summoning messages.
-- /lockport whisper - Enables or Disables whispering the target when summoning.
-- /lockport shards - Enables or Disables shard count message when you summon.
-- /lockport sound - Enables or Disables the sound on summon request.
-- /lockport popup - Enables or Disables showing the summon queue when a request is made.
-- /lockport say - Enables or Disables announcing the summmon in /say.
 
 ## To Do:
 - Make setting to change what channel your summon messages get sent to.

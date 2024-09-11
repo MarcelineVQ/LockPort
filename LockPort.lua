@@ -4,27 +4,90 @@ local lockport_title = "|CFFB700B7L|CFFFF00FFo|CFFFF50FFc|CFFFF99FFk|CFFFFC4FFP|
 BINDING_HEADER_LOCKPORT = lockport_title
 BINDING_NAME_SUMMON_KEY = "Summon next queue target"
 
+
 local LockPortOptions_DefaultSettings = {
-	whisper = true,
-	zone    = true,
-	shards  = true,
-	sound   = true,
-	popup   = true,
-	say     = true,
+	whisper         = true,
+	zone            = true,
+	shards          = true,
+	sound           = true,
+	popup           = true,
+	say             = true,
+	say_text        = "SAY",
+	on_portal       = true, -- custom message to post when portal appears
+	on_portal_text  = "Click the portal", -- custom message to post when portal appears
 }
+
+local Opts = {
+	{ name = "whisper",
+		desc = "Toggle the usage of whisper.",
+		tooltip_title = "Whispers",
+		tooltip_text = "Toggles on and off whisper messages on summon.",
+	  default = true, },
+	{
+		name = "zone",
+		desc = "Toggle adding zone info to a summon.",
+		tooltip_title = "Zones",
+		tooltip_text = "Toggles on and off zone messages on summon.",
+	  default = true, },
+	{ name = "shards",
+		desc = "Toggle shards count message.",
+		tooltip_title = "Shards",
+		tooltip_text = "Toggles on and off shard messages on summon.",
+	  default = true, },
+	{ name = "sound",
+		desc = "Toggle sound on summon request.",
+		tooltip_title = "Sound",
+		tooltip_text = "Toggles on and off sound on summon request.",
+	  default = true, },
+	{ name = "popup",
+		desc = "Popup window on summon request.",
+		tooltip_title = "Queue Popup",
+		tooltip_text = "Show the summon queue when a request is made.",
+	  default = true, },
+	{ name = "say",
+		desc = "Announce started summon in specified channel.",
+		tooltip_title = "Starting Announce",
+		tooltip_text = "Announce starting a summon in specified channel.",
+		custom_box1 = true,
+		custom_box1_desc = "Channel",
+		custom_box1_text = "SAY",
+	  default = true, },
+	{ name = "on_portal",
+		desc = "Send message on portal creation.",
+		tooltip_title = "Portal Message",
+		tooltip_text = "Send a message in /say when a portal is created.",
+		custom_box1 = true,
+		custom_box1_desc = "Message",
+		custom_box1_text = "Click the portal",
+	  default = true, },
+}
+
+local Opt_Buttons = {}
+
+-- TODO, ability to flag/deflag someone as priority
+-- needs a console option, needs an indication in the buttons
+-- needs /lockport summon to also go by prio, which it does not currently.
+-- alterntively: inserting to LockPortDB could be where the prio happens
 
 local function LockPort_Initialize()
 	LockPortOptions = LockPortOptions or {}
-	for i in LockPortOptions_DefaultSettings do
-		LockPortOptions[i] = (LockPortOptions[i] == nil and LockPortOptions_DefaultSettings[i]) or LockPortOptions[i]
+	for _,k in ipairs(Opts) do
+		LockPortOptions[k.name] = (LockPortOptions[k.name] == nil and k.default) or LockPortOptions[k.name]
+	end
+	for k,v in pairs(LockPortOptions_DefaultSettings) do
+		LockPortOptions[k] = (LockPortOptions[k] == nil and v) or LockPortOptions[k]
 	end
 
-	WhisperCheckButton:SetChecked(LockPortOptions["whisper"] or nil)
-	ZoneCheckButton:SetChecked(LockPortOptions["zone"] or nil)
-	ShardsCheckButton:SetChecked(LockPortOptions["shards"] or nil)
-	SoundCheckButton:SetChecked(LockPortOptions["sound"] or nil)
-	PopupCheckButton:SetChecked(LockPortOptions["popup"] or nil)
-	SayCheckButton:SetChecked(LockPortOptions["say"] or nil)
+	LockPortOptions.prio = LockPortOptions.prio or {}
+
+	local t = {}
+	for i,opt in pairs(Opts) do
+		print(i .. " " .. opt.name)
+		local button = CreateCheckButton(i == 1 and LockPort_SettingsFrame or t[i-1],i,opt)
+		button:SetChecked(LockPortOptions[button.name] or nil)
+		table.insert(t,button)
+		Opt_Buttons[button.name] = button
+	end
 end
 
 function LockPort_EventFrame_OnLoad()
@@ -37,7 +100,8 @@ function LockPort_EventFrame_OnLoad()
 	this:RegisterEvent("CHAT_MSG_PARTY")
 	this:RegisterEvent("CHAT_MSG_RAID")
 	this:RegisterEvent("CHAT_MSG_RAID_LEADER")
-	-- Commands
+	this:RegisterEvent("COMBAT_TEXT_UPDATE")
+		-- Commands
 	SlashCmdList["LockPort"] = LockPort_SlashCommand
 	SLASH_LockPort1 = "/lockport"
 	MSG_PREFIX_ADD		= "RSAdd"
@@ -50,6 +114,7 @@ function LockPort_EventFrame_OnLoad()
 	LockPortLoc_Settings_Chat_Header = "|CFFB700B7C|CFFFF00FFh|CFFFF50FFa|CFFFF99FFt|CFFFFC4FF S|cffffffffett|rings"
 end
 
+-- TODO does this have a party/raid check or can random people trigger it?
 function LockPort_EventFrame_OnEvent()
 	if event == "VARIABLES_LOADED" then
 		this:UnregisterEvent("VARIABLES_LOADED")
@@ -84,6 +149,10 @@ function LockPort_EventFrame_OnEvent()
 				end
 			end
 		end
+	elseif event == "COMBAT_TEXT_UPDATE" and arg1 == "SPELL_CAST" and arg2 == "Ritual of Summoning" then
+		if LockPortOptions.on_portal then
+			SendChatMessage(LockPortOptions.on_portal_text, "SAY")
+		end
 	end
 end
 
@@ -100,7 +169,6 @@ end
 function LockPort_DoSummon(name,button)
 	local message, base_message, whisper_message, base_whisper_message, whisper_eviltwin_message, zone_message, subzone_message = ""
 	local bag,slot,texture,count = FindItem("Soul Shard")
-	local eviltwin_debuff = "Spell_Shadow_Charm"
 
 	local units = LockPort_GetGroupMembers()
 	if button  == "LeftButton" and IsControlKeyDown() then
@@ -120,13 +188,16 @@ function LockPort_DoSummon(name,button)
 			for i, v in ipairs(units) do
 				if v.rName == name then
 					UnitID = v.rUnit
+					if not next(LockPortDB) then
+						DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : No queued names, summoning target: <" .. name .. ">")
+					end
 					break
 				end
 			end
 			if UnitID then
 				playercombat = UnitAffectingCombat("player")
 				targetcombat = UnitAffectingCombat(UnitID)
-			
+
 				if not playercombat and not targetcombat then
 					count = count-1
 					base_message 			= "Summoning " .. name .. ""
@@ -139,13 +210,13 @@ function LockPort_DoSummon(name,button)
 
 					TargetUnit(UnitID)
 
-					if (Check_TargetInRange()) then
-						DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : <" .. name .. "> has been summoned already (|cffff0000in range|r)")
+					if Check_TargetInRange() and LockPort_hasValue(LockPortDB, name) then
 						-- Remove the already summoned target
 						for i, v in ipairs (LockPortDB) do
 							if v == name then
 						    	SendAddonMessage(MSG_PREFIX_REMOVE, name, "RAID")
 						    	table.remove(LockPortDB, i)
+									DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : <" .. name .. "> has been summoned already (|cffff0000in range|r)")
 						    	LockPort_UpdateList()
 						    end
 						end
@@ -167,7 +238,7 @@ function LockPort_DoSummon(name,button)
 					    	message = message .. shards_message
 						end
 						if LockPortOptions.say then
-							SendChatMessage(message, "SAY")
+							SendChatMessage(message, LockPortOptions.say_text)
 						end
 
 						-- Send Whisper Message
@@ -178,12 +249,13 @@ function LockPort_DoSummon(name,button)
 						-- Remove the summoned target
 						for i, v in ipairs (LockPortDB) do
 							if v == name then
-						    	SendAddonMessage(MSG_PREFIX_REMOVE, name, "RAID")
-						    	table.remove(LockPortDB, i)
-						    	LockPort_UpdateList()
-						    end
+								SendAddonMessage(MSG_PREFIX_REMOVE, name, "RAID")
+								table.remove(LockPortDB, i)
+								LockPort_UpdateList()
+							end
 						end
 					end
+					ClearTarget()
 				else
 					DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : Player is in combat")
 				end
@@ -219,7 +291,12 @@ function LockPort_DirectSummon()
 			LockPort_DoSummon(units[1].rName,"LeftButton")
 		end
 	else
-		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : No names in queue to summon.")
+		local t = UnitName("target")
+		if t then
+			LockPort_DoSummon(t,"LeftButton")
+		else
+			DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : No names in queue to summon.")
+		end
 	end
 end
 
@@ -229,7 +306,7 @@ function LockPort_UpdateList()
 	LockPort_BrowseDB = {}
 
 	--get raid member data
-	local units = LockPort_GetGroupMembers()
+	local units = LockPort_GetGroupMembers() or {}
 	for _,unit in ipairs(units) do
 		for i, v in ipairs(LockPortDB) do
 			if v == unit.rName then
@@ -277,14 +354,14 @@ function LockPort_SlashCommand(msg)
 		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." usage:")
 		DEFAULT_CHAT_FRAME:AddMessage("/lockport { help  | summon | show | zone | whisper | shards | settings | sound | popup | say }")
 		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9help|r: prints out this help")
-		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9summon|r: summons the next player")
+		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9summon|r: summons the next queued player, or targeted player")
 		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9show|r: shows the current summon list")
-		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9zone|r: toggles zoneinfo")
-		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9whisper|r: toggles the usage of /w")
-		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9shards|r: toggles shards count when you summon")
-		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9settings|r: shows the settings window")
-		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9sound|r: toggles sound on summon request")
-		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9popup|r: toggles summon window showing when a request is made")
+		-- DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9zone|r: toggles zoneinfo")
+		-- DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9whisper|r: toggles the usage of /w")
+		-- DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9shards|r: toggles shards count when you summon")
+		-- DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9settings|r: shows the settings window")
+		-- DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9sound|r: toggles sound on summon request")
+		-- DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9popup|r: toggles summon window showing when a request is made")
 		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9say|r: toggles announcing the summmon in /say")
 		DEFAULT_CHAT_FRAME:AddMessage("To drag the frame use left mouse button")
 	elseif msg == "summon" then
@@ -293,18 +370,18 @@ function LockPort_SlashCommand(msg)
 		for i, v in ipairs(LockPortDB) do
 			DEFAULT_CHAT_FRAME:AddMessage(tostring(v))
 		end
-	elseif msg == "zone" then
-		ZoneCheckButton:Click()
-	elseif msg == "whisper" then
-		WhisperCheckButton:Click()
-	elseif msg == "shards" then
-		ShardsCheckButton:Click()
-	elseif msg == "sound" then
-		SoundCheckButton:Click()
-	elseif msg == "popup" then
-		PopupCheckButton:Click()
-	elseif msg == "say" then
-		SayCheckButton:Click()
+	-- elseif msg == "zone" then
+	-- 	Opt_Buttons.zone:Click()
+	-- elseif msg == "whisper" then
+	-- 	Opt_Buttons.whisper:Click()
+	-- elseif msg == "shards" then
+	-- 	Opt_Buttons.shards:Click()
+	-- elseif msg == "sound" then
+	-- 	Opt_Buttons.sound:Click()
+	-- elseif msg == "popup" then
+	-- 	Opt_Buttons.say:Click()
+	-- elseif msg == "say" then
+		-- Opt_Buttons.SayCheckButton:Click()
 	elseif msg == "settings" then
 		LockPort_Settings_Toggle()
 	else
@@ -406,40 +483,67 @@ local function enabled_disabled(bool)
 	return (bool and "|cff00ff00enabled|r" or "|cffff0000disabled|r")
 end
 
-function WhisperCheckButton_OnClick()
-	LockPortOptions["whisper"] = boolean(WhisperCheckButton:GetChecked())
-	DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - whisper: "..enabled_disabled(LockPortOptions["whisper"]))
-end
+function CreateCheckButton(parent,ix,button_data)
+	local button = CreateFrame("CheckButton",nil,parent)
+	button:SetWidth(35)
+	button:SetHeight(35)
+	button.name = button_data.name
+	button.tooltip_title = button_data.tooltip_title
+	button.tooltip_text = button_data.tooltip_text
+	button.custom_box1 = button_data.custom_box1
+	button.custom_box1_desc = button_data.custom_box1_desc
 
-function ZoneCheckButton_OnClick()
-		LockPortOptions["zone"] = boolean(ZoneCheckButton:GetChecked())
-		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - zoneinfo: "..enabled_disabled(LockPortOptions["zone"]))
-end
+	button:SetPoint("TOPLEFT", 0, -((parent == LockPort_SettingsFrame and 35 or 25) + ((parent.custom_box1 and 25) or 0)))
+	button:SetNormalTexture("Interface\\Buttons\\UI-CheckBox-Up")
+	button:SetPushedTexture("Interface\\Buttons\\UI-CheckBox-Down")
+	button:SetHighlightTexture("Interface\\Buttons\\UI-CheckBox-Highlight","ADD")
+	button:SetCheckedTexture("Interface\\Buttons\\UI-CheckBox-Check")
+	-- button:SetDisabledCheckedTexture("Interface\\Buttons\\UI-CheckBox-Check-Disabled")
+	button:SetScript("OnEnter", function ()
+		GameTooltip:SetOwner(LockPort_SettingsFrame, "ANCHOR_TOPLEFT",4, -380);
+		GameTooltip:SetPadding(50, 0);
+		GameTooltip:SetText(this.tooltip_title);
+		GameTooltip:AddLine(this.tooltip_text, 255,71,9,0);
+		GameTooltip:Show();
+	end)
+	button:SetScript("OnLeave", function () GameTooltip:Hide() end)
+	button:SetScript("OnClick", function ()
+		LockPortOptions[this.name] = boolean(this:GetChecked())
+		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - "..button.tooltip_title..": "..enabled_disabled(LockPortOptions[this.name]))
+	end)
 
-function ShardsCheckButton_OnClick()
-	LockPortOptions["shards"] = boolean(ShardsCheckButton:GetChecked())
-	DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - shards: "..enabled_disabled(LockPortOptions["shards"]))
-end
+	local desc = button:CreateFontString()
+	desc:SetFont("Interface\\AddOns\\LockPort\\fonts\\Expressway.ttf",12)
+	desc:SetPoint("LEFT",button,"RIGHT",5,2)
+	desc:SetText(button_data.desc)
 
-function SoundCheckButton_OnClick()
-	LockPortOptions["sound"] = boolean(SoundCheckButton:GetChecked())
-	DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - sound: "..enabled_disabled(LockPortOptions["sound"]))
-end
+	-- make other input boxes here
+	if button.custom_box1 then
+		-- Create the optional text input box below the button
+		local editBox = CreateFrame("EditBox", button.name.."TextBox", button, "InputBoxTemplate")
+		editBox:SetWidth(200)
+		editBox:SetHeight(25)
+		editBox:SetPoint("TOPLEFT", button, "BOTTOMRIGHT", 10, 4) -- Positioning it below the checkbox button
+		editBox:SetAutoFocus(false)  -- Prevent it from automatically focusing when shown
+		print(button.name .. "_text")
+		print(LockPortOptions[button.name .. "_text"])
+		editBox:SetText(LockPortOptions[button.name .. "_text"])          -- Set default text (empty string)
+		editBox:SetScript("OnEnterPressed", function()
+			LockPortOptions[button.name .. "_text"] = this:GetText()
+			this:ClearFocus()
+		end)
+		editBox:SetScript("OnEscapePressed", function()
+			this:ClearFocus()
+		end)
+		editBox:SetScript("OnEnter", function ()
+			GameTooltip:SetOwner(LockPort_SettingsFrame, "ANCHOR_TOPLEFT",4, -380);
+			GameTooltip:SetPadding(50, 0);
+			GameTooltip:AddLine(button.custom_box1_desc, 255,71,9,0);
+			GameTooltip:Show();
+		end)
+		editBox:SetScript("OnLeave", function () GameTooltip:Hide() end)
+	end
 
-function PopupCheckButton_OnClick()
-	LockPortOptions["popup"] = boolean(PopupCheckButton:GetChecked())
-	DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - popup: "..enabled_disabled(LockPortOptions["popup"]))
-end
+	return button
 
-function SayCheckButton_OnClick()
-	LockPortOptions["say"] = boolean(SayCheckButton:GetChecked())
-	DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - say: "..enabled_disabled(LockPortOptions["say"]))
 end
-
--- LockPort_CheckButtons = {}
--- for setting,_ in pairs(LockPortOptions_DefaultSettings) do
--- 	LockPort_CheckButtons[setting] = function ()
--- 		LockPortOptions[setting] = boolean(SayCheckButton:GetChecked())
--- 		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." - "..setting..": "..enabled_disabled(LockPortOptions[setting]))
--- 	end
--- end
