@@ -217,6 +217,7 @@ function LockPort_DoSummon(name,button)
 						    	SendAddonMessage(MSG_PREFIX_REMOVE, name, "RAID")
 						    	table.remove(LockPortDB, i)
 									DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : <" .. name .. "> has been summoned already (|cffff0000in range|r)")
+									ClearTarget()
 						    	LockPort_UpdateList()
 						    end
 						end
@@ -255,7 +256,6 @@ function LockPort_DoSummon(name,button)
 							end
 						end
 					end
-					ClearTarget()
 				else
 					DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : Player is in combat")
 				end
