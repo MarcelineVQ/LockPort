@@ -82,7 +82,7 @@ local function LockPort_Initialize()
 
 	local t = {}
 	for i,opt in pairs(Opts) do
-		print(i .. " " .. opt.name)
+		-- print(i .. " " .. opt.name)
 		local button = CreateCheckButton(i == 1 and LockPort_SettingsFrame or t[i-1],i,opt)
 		button:SetChecked(LockPortOptions[button.name] or nil)
 		table.insert(t,button)
@@ -525,8 +525,8 @@ function CreateCheckButton(parent,ix,button_data)
 		editBox:SetHeight(25)
 		editBox:SetPoint("TOPLEFT", button, "BOTTOMRIGHT", 10, 4) -- Positioning it below the checkbox button
 		editBox:SetAutoFocus(false)  -- Prevent it from automatically focusing when shown
-		print(button.name .. "_text")
-		print(LockPortOptions[button.name .. "_text"])
+		-- print(button.name .. "_text")
+		-- print(LockPortOptions[button.name .. "_text"])
 		editBox:SetText(LockPortOptions[button.name .. "_text"])          -- Set default text (empty string)
 		editBox:SetScript("OnEnterPressed", function()
 			LockPortOptions[button.name .. "_text"] = this:GetText()

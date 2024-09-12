@@ -15,7 +15,7 @@
 - If no player is on the list the frame is hidden again (type /lockport to manually show).
 
 ## Utility:
-- Type `/lockport summon` to fulfill the next pending summmon request via chatwindow or macro.
+- Type `/lockport summon` to fulfill the next pending summmon request via chatwindow or macro. Summons your target if there's no request.
 - You can set a keybind to do the same in the keybinds menu.
 
 ## Options:
@@ -25,9 +25,7 @@
 - /lockport settings - Opens the settings window.
 
 ## To Do:
-- Make setting to change what channel your summon messages get sent to.
-- Make setting for custom messages.
-- Make Ignore list for people you dont like.
+- Make configurable prio list.
 
 ## How it looks:
 
