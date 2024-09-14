@@ -49,7 +49,7 @@ local Opts = {
 		tooltip_title = "Starting Announce",
 		tooltip_text = "Announce starting a summon in specified channel.",
 		custom_box1 = true,
-		custom_box1_desc = "Channel",
+		custom_box1_desc = "Channel to announce to, e.g. GUILD,SAY,YELL",
 		custom_box1_text = "SAY",
 	  default = true, },
 	{ name = "on_portal",
@@ -57,7 +57,7 @@ local Opts = {
 		tooltip_title = "Portal Message",
 		tooltip_text = "Send a message in /say when a portal is created.",
 		custom_box1 = true,
-		custom_box1_desc = "Message",
+		-- custom_box1_desc = "Message",
 		custom_box1_text = "Click the portal",
 	  default = true, },
 }
@@ -101,14 +101,14 @@ function LockPort_EventFrame_OnLoad()
 	this:RegisterEvent("CHAT_MSG_RAID")
 	this:RegisterEvent("CHAT_MSG_RAID_LEADER")
 	this:RegisterEvent("COMBAT_TEXT_UPDATE")
-		-- Commands
+	-- Commands
 	SlashCmdList["LockPort"] = LockPort_SlashCommand
 	SLASH_LockPort1 = "/lockport"
 	MSG_PREFIX_ADD		= "RSAdd"
 	MSG_PREFIX_REMOVE	= "RSRemove"
 	LockPortDB = {}
 	-- Sync Summon Table between raiders ? (if in raid & raiders with unempty table)
-	--localization
+	-- TODO, localization
 	LockPortLoc_Header = lockport_title
 	LockPortLoc_Settings_Header = lockport_title.." Settings"
 	LockPortLoc_Settings_Chat_Header = "|CFFB700B7C|CFFFF00FFh|CFFFF50FFa|CFFFF99FFt|CFFFFC4FF S|cffffffffett|rings"
@@ -165,10 +165,20 @@ function LockPort_hasValue (tab, val)
     return false
 end
 
+function LockPort_null(t)
+	for _ in t do
+		return false
+	end
+	return true
+end
+
 --GUI
 function LockPort_DoSummon(name,button)
 	local message, base_message, whisper_message, base_whisper_message, whisper_eviltwin_message, zone_message, subzone_message = ""
 	local bag,slot,texture,count = FindItem("Soul Shard")
+	local silithyst_buff = "Spell_Holiday_ToW_SpiceCloud"
+	-- local silithyst_buff = "Ability_Warrior_BattleShout" -- test
+	local has_silithyst = false
 
 	local units = LockPort_GetGroupMembers()
 	if button  == "LeftButton" and IsControlKeyDown() then
@@ -180,7 +190,7 @@ function LockPort_DoSummon(name,button)
 				end
 			end
 		else
-			DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : no raid found")
+			DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : not in a group")
 		end
 	elseif button == "LeftButton" and not IsControlKeyDown() then
 		local UnitID = nil
@@ -188,7 +198,7 @@ function LockPort_DoSummon(name,button)
 			for i, v in ipairs(units) do
 				if v.rName == name then
 					UnitID = v.rUnit
-					if not next(LockPortDB) then
+					if LockPort_null(LockPortDB) then
 						DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : No queued names, summoning target: <" .. name .. ">")
 					end
 					break
@@ -210,16 +220,36 @@ function LockPort_DoSummon(name,button)
 
 					TargetUnit(UnitID)
 
+					-- Silithyst check
+					for i=1,40 do
+						local s = UnitBuff("target", i)
+						if s then
+							if strfind(strlower(s), strlower(silithyst_buff)) then
+								-- Remove the invalid summoned target
+								for i, v in ipairs (LockPortDB) do
+									if v == name then
+										SendAddonMessage(MSG_PREFIX_REMOVE, name, "RAID")
+										table.remove(LockPortDB, i)
+										ClearTarget()
+										LockPort_UpdateList()
+									end
+								end
+								DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : <" .. name .. "> has |cffff0000Silithyst dust|r buff")
+								SendChatMessage("You must remove Silithyst dust before being summoned.", "WHISPER", nil, name)
+								return
+							end
+						end
+					end
 					if Check_TargetInRange() and LockPort_hasValue(LockPortDB, name) then
 						-- Remove the already summoned target
 						for i, v in ipairs (LockPortDB) do
 							if v == name then
-						    	SendAddonMessage(MSG_PREFIX_REMOVE, name, "RAID")
-						    	table.remove(LockPortDB, i)
-									DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : <" .. name .. "> has been summoned already (|cffff0000in range|r)")
-									ClearTarget()
-						    	LockPort_UpdateList()
-						    end
+								SendAddonMessage(MSG_PREFIX_REMOVE, name, "RAID")
+								table.remove(LockPortDB, i)
+								DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : <" .. name .. "> has been summoned already (|cffff0000in range|r)")
+								ClearTarget()
+								LockPort_UpdateList()
+							end
 						end
 					else
 						-- TODO: Detect if spell is aborted/cancelled : use SpellStopCasting if sit ("You must be standing to do that")
@@ -228,15 +258,15 @@ function LockPort_DoSummon(name,button)
 						-- Send Raid Message
 						if LockPortOptions.zone then
 							if GetSubZoneText() == "" then
-						    	message         = message .. zone_message
-						    	whisper_message = base_whisper_message .. zone_message
+								message         = message .. zone_message
+								whisper_message = base_whisper_message .. zone_message
 							else
-						    	message         = message .. zone_message .. subzone_message
-						    	whisper_message = whisper_message .. zone_message .. subzone_message
+								message         = message .. zone_message .. subzone_message
+								whisper_message = whisper_message .. zone_message .. subzone_message
 							end
 						end
 						if LockPortOptions.shards then
-					    	message = message .. shards_message
+							message = message .. shards_message
 						end
 						if LockPortOptions.say then
 							SendChatMessage(message, LockPortOptions.say_text)
@@ -260,12 +290,12 @@ function LockPort_DoSummon(name,button)
 					DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : Player is in combat")
 				end
 			else
-				DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : <" .. tostring(name) .. "> not found in raid. UnitID: " .. tostring(UnitID))
+				DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : <" .. tostring(name) .. "> not found in party/raid. UnitID: " .. tostring(UnitID))
 				SendAddonMessage(MSG_PREFIX_REMOVE, name, "RAID")
 				LockPort_UpdateList()
 			end
 		else
-			DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : no raid found")
+			DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : not in a group")
 		end
 	elseif button == "RightButton" then
 		for i, v in ipairs (LockPortDB) do
@@ -285,17 +315,17 @@ function LockPort_NameListButton_OnClick(mouse_button)
 end
 
 function LockPort_DirectSummon()
-	if next(LockPortDB) then
+	if not LockPort_null(LockPortDB) then
 		local units = LockPort_GetGroupMembers()
 		if units then
-			LockPort_DoSummon(units[1].rName,"LeftButton")
+			LockPort_DoSummon(LockPortDB[1],"LeftButton")
 		end
 	else
 		local t = UnitName("target")
 		if t then
 			LockPort_DoSummon(t,"LeftButton")
 		else
-			DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : No names in queue to summon.")
+			DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : No names in queue to summon")
 		end
 	end
 end
@@ -525,9 +555,8 @@ function CreateCheckButton(parent,ix,button_data)
 		editBox:SetHeight(25)
 		editBox:SetPoint("TOPLEFT", button, "BOTTOMRIGHT", 10, 4) -- Positioning it below the checkbox button
 		editBox:SetAutoFocus(false)  -- Prevent it from automatically focusing when shown
-		-- print(button.name .. "_text")
-		-- print(LockPortOptions[button.name .. "_text"])
 		editBox:SetText(LockPortOptions[button.name .. "_text"])          -- Set default text (empty string)
+		editBox:SetScript("OnShow", function () this:SetText(LockPortOptions[button.name .. "_text"]) end)          -- Set default text (empty string))
 		editBox:SetScript("OnEnterPressed", function()
 			LockPortOptions[button.name .. "_text"] = this:GetText()
 			this:ClearFocus()
@@ -535,13 +564,15 @@ function CreateCheckButton(parent,ix,button_data)
 		editBox:SetScript("OnEscapePressed", function()
 			this:ClearFocus()
 		end)
-		editBox:SetScript("OnEnter", function ()
-			GameTooltip:SetOwner(LockPort_SettingsFrame, "ANCHOR_TOPLEFT",4, -380);
-			GameTooltip:SetPadding(50, 0);
-			GameTooltip:AddLine(button.custom_box1_desc, 255,71,9,0);
-			GameTooltip:Show();
-		end)
-		editBox:SetScript("OnLeave", function () GameTooltip:Hide() end)
+		if button.custom_box1_desc then
+			editBox:SetScript("OnEnter", function ()
+				GameTooltip:SetOwner(LockPort_SettingsFrame, "ANCHOR_TOPLEFT",4, -380);
+				GameTooltip:SetPadding(50, 0);
+				GameTooltip:AddLine(button.custom_box1_desc, 255,71,9,0);
+				GameTooltip:Show();
+			end)
+			editBox:SetScript("OnLeave", function () GameTooltip:Hide() end)
+		end
 	end
 
 	return button
