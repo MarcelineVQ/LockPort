@@ -487,6 +487,75 @@ function Check_TargetInRange()
    end
 end
 
+-- SuperWoW Integration: Auto-remove players who come in range
+-- SuperWoW provides UnitPosition(unitid) for friendly unit coordinates
+local hasSuperwow = SUPERWOW_VERSION ~= nil
+local LOCKPORT_SUMMON_RANGE = 30  -- yards
+local lockport_checkInterval = 2  -- seconds between range checks
+local lockport_timeSinceLastCheck = 0
+
+-- Calculate 3D distance to a friendly unit using SuperWoW's UnitPosition
+local function LockPort_GetDistance(unit)
+	if not hasSuperwow then return nil end
+	if not UnitExists(unit) then return nil end
+	
+	local x1, y1, z1 = UnitPosition("player")
+	local x2, y2, z2 = UnitPosition(unit)
+	
+	if x1 and y1 and z1 and x2 and y2 and z2 then
+		return ((x2 - x1)^2 + (y2 - y1)^2 + (z2 - z1)^2)^0.5
+	end
+	return nil
+end
+
+-- Check all queued players and remove those who are now in range
+local function LockPort_CheckQueuedPlayersInRange()
+	if not hasSuperwow then return end
+	if UnitAffectingCombat("player") then return end
+	if LockPort_null(LockPortDB) then return end
+	
+	local units = LockPort_GetGroupMembers()
+	if not units then return end
+	
+	-- Build name -> unit lookup
+	local nameToUnit = {}
+	for _, unit in ipairs(units) do
+		nameToUnit[unit.rName] = unit.rUnit
+	end
+	
+	local removedAny = false
+	-- Check each queued player (iterate backwards for safe removal)
+	for i = table.getn(LockPortDB), 1, -1 do
+		local name = LockPortDB[i]
+		local unitId = nameToUnit[name]
+		
+		if unitId then
+			local distance = LockPort_GetDistance(unitId)
+			if distance and distance <= LOCKPORT_SUMMON_RANGE then
+				SendAddonMessage(MSG_PREFIX_REMOVE, name, "RAID")
+				table.remove(LockPortDB, i)
+				DEFAULT_CHAT_FRAME:AddMessage(lockport_title .. " : <" .. name .. "> is now |cff00ff00in range|r - removed from queue")
+				removedAny = true
+			end
+		end
+	end
+	
+	if removedAny then
+		LockPort_UpdateList()
+	end
+end
+
+-- OnUpdate handler for periodic range checking (only active with SuperWoW)
+function LockPort_RangeCheck_OnUpdate()
+	if not hasSuperwow then return end
+	
+	lockport_timeSinceLastCheck = lockport_timeSinceLastCheck + arg1
+	if lockport_timeSinceLastCheck >= lockport_checkInterval then
+		lockport_timeSinceLastCheck = 0
+		LockPort_CheckQueuedPlayersInRange()
+	end
+end
+
 -- Settings Window
 function LockPort_Settings_Toggle()
 	if LockPort_SettingsFrame:IsVisible() then

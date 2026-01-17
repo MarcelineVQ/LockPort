@@ -8,6 +8,9 @@
 			<OnEvent>
 				LockPort_EventFrame_OnEvent();
 			</OnEvent>
+			<OnUpdate>
+				LockPort_RangeCheck_OnUpdate();
+			</OnUpdate>
 		</Scripts>
 	</Frame>
 	
