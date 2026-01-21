@@ -15,6 +15,7 @@ local LockPortOptions_DefaultSettings = {
 	say_text        = "SAY",
 	on_portal       = true, -- custom message to post when portal appears
 	on_portal_text  = "Click the portal", -- custom message to post when portal appears
+	auto_remove_in_range = true, -- auto-remove players who come in range (requires SuperWoW or UnitXP)
 }
 
 local Opts = {
@@ -59,6 +60,11 @@ local Opts = {
 		custom_box1 = true,
 		-- custom_box1_desc = "Message",
 		custom_box1_text = "Click the portal",
+	  default = true, },
+	{ name = "auto_remove_in_range",
+		desc = "Auto-remove players when in range.",
+		tooltip_title = "Auto-Remove In Range",
+		tooltip_text = "Automatically remove queued players who come within summon range. Requires SuperWoW or UnitXP.",
 	  default = true, },
 }
 
@@ -487,30 +493,45 @@ function Check_TargetInRange()
    end
 end
 
--- SuperWoW Integration: Auto-remove players who come in range
+-- SuperWoW / UnitXP Integration: Auto-remove players who come in range
+-- UnitXP provides UnitXP("distanceBetween", ...) for distance calculation
 -- SuperWoW provides UnitPosition(unitid) for friendly unit coordinates
-local hasSuperwow = SUPERWOW_VERSION ~= nil
 local LOCKPORT_SUMMON_RANGE = 30  -- yards
 local lockport_checkInterval = 2  -- seconds between range checks
 local lockport_timeSinceLastCheck = 0
 
--- Calculate 3D distance to a friendly unit using SuperWoW's UnitPosition
+-- Check if a distance API is available (evaluated when needed, not at load time)
+local function LockPort_HasDistanceAPI()
+	return UnitXP ~= nil or SUPERWOW_VERSION ~= nil
+end
+
+-- Calculate distance to a friendly unit using available API
+-- Prefers UnitXP (cleaner API with built-in range calculation), falls back to SuperWoW
 local function LockPort_GetDistance(unit)
-	if not hasSuperwow then return nil end
 	if not UnitExists(unit) then return nil end
 	
-	local x1, y1, z1 = UnitPosition("player")
-	local x2, y2, z2 = UnitPosition(unit)
-	
-	if x1 and y1 and z1 and x2 and y2 and z2 then
-		return ((x2 - x1)^2 + (y2 - y1)^2 + (z2 - z1)^2)^0.5
+	-- Prefer UnitXP (cleaner API, "ranged" accounts for combat reach)
+	if UnitXP then
+		local dist = UnitXP("distanceBetween", "player", unit, "ranged")
+		return dist
 	end
+	
+	-- Fallback to SuperWoW
+	if SUPERWOW_VERSION and UnitPosition then
+		local x1, y1, z1 = UnitPosition("player")
+		local x2, y2, z2 = UnitPosition(unit)
+		if x1 and y1 and z1 and x2 and y2 and z2 then
+			return ((x2 - x1)^2 + (y2 - y1)^2 + (z2 - z1)^2)^0.5
+		end
+	end
+	
 	return nil
 end
 
 -- Check all queued players and remove those who are now in range
 local function LockPort_CheckQueuedPlayersInRange()
-	if not hasSuperwow then return end
+	if not LockPortOptions.auto_remove_in_range then return end
+	if not LockPort_HasDistanceAPI() then return end
 	if UnitAffectingCombat("player") then return end
 	if LockPort_null(LockPortDB) then return end
 	
@@ -545,9 +566,10 @@ local function LockPort_CheckQueuedPlayersInRange()
 	end
 end
 
--- OnUpdate handler for periodic range checking (only active with SuperWoW)
+-- OnUpdate handler for periodic range checking (only active with SuperWoW or UnitXP)
 function LockPort_RangeCheck_OnUpdate()
-	if not hasSuperwow then return end
+	if not LockPortOptions.auto_remove_in_range then return end
+	if not LockPort_HasDistanceAPI() then return end
 	
 	lockport_timeSinceLastCheck = lockport_timeSinceLastCheck + arg1
 	if lockport_timeSinceLastCheck >= lockport_checkInterval then
