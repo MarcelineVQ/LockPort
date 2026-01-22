@@ -1,9 +1,17 @@
 local lockport_title = "|CFFB700B7L|CFFFF00FFo|CFFFF50FFc|CFFFF99FFk|CFFFFC4FFP|cffffffffort|r"
+local lockport_debug = false  -- toggle with /lockport debug
 
--- LOCKPORT_HEADER = lockport_title
 BINDING_HEADER_LOCKPORT = lockport_title
 BINDING_NAME_SUMMON_KEY = "Summon next queue target"
 
+-- Helper to get correct addon message channel (RAID or PARTY)
+local function LockPort_GetAddonChannel()
+	if GetNumRaidMembers() > 0 then
+		return "RAID"
+	else
+		return "PARTY"
+	end
+end
 
 local LockPortOptions_DefaultSettings = {
 	whisper         = true,
@@ -15,7 +23,7 @@ local LockPortOptions_DefaultSettings = {
 	say_text        = "SAY",
 	on_portal       = true, -- custom message to post when portal appears
 	on_portal_text  = "Click the portal", -- custom message to post when portal appears
-	auto_remove_in_range = true, -- auto-remove players who come in range (requires SuperWoW or UnitXP)
+	auto_remove_in_range = true, -- auto-remove players who come in range
 }
 
 local Opts = {
@@ -64,7 +72,7 @@ local Opts = {
 	{ name = "auto_remove_in_range",
 		desc = "Auto-remove players when in range.",
 		tooltip_title = "Auto-Remove In Range",
-		tooltip_text = "Automatically remove queued players who come within summon range. Requires SuperWoW or UnitXP.",
+		tooltip_text = "Automatically remove queued players who come within summon range.",
 	  default = true, },
 }
 
@@ -129,7 +137,7 @@ function LockPort_EventFrame_OnEvent()
 		-- if (string.find(arg1, "^123") and UnitClass("player")~=arg2) then
 		if string.find(arg1, "^%s*123") then
 			-- DEFAULT_CHAT_FRAME:AddMessage("CHAT_MSG")
-			SendAddonMessage(MSG_PREFIX_ADD, arg2, "RAID")
+			SendAddonMessage(MSG_PREFIX_ADD, arg2, LockPort_GetAddonChannel())
 		end
 	elseif event == "CHAT_MSG_ADDON" then
 		if arg1 == MSG_PREFIX_ADD then
@@ -234,7 +242,7 @@ function LockPort_DoSummon(name,button)
 								-- Remove the invalid summoned target
 								for i, v in ipairs (LockPortDB) do
 									if v == name then
-										SendAddonMessage(MSG_PREFIX_REMOVE, name, "RAID")
+										SendAddonMessage(MSG_PREFIX_REMOVE, name, LockPort_GetAddonChannel())
 										table.remove(LockPortDB, i)
 										ClearTarget()
 										LockPort_UpdateList()
@@ -250,7 +258,7 @@ function LockPort_DoSummon(name,button)
 						-- Remove the already summoned target
 						for i, v in ipairs (LockPortDB) do
 							if v == name then
-								SendAddonMessage(MSG_PREFIX_REMOVE, name, "RAID")
+								SendAddonMessage(MSG_PREFIX_REMOVE, name, LockPort_GetAddonChannel())
 								table.remove(LockPortDB, i)
 								DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : <" .. name .. "> has been summoned already (|cffff0000in range|r)")
 								ClearTarget()
@@ -286,7 +294,7 @@ function LockPort_DoSummon(name,button)
 						-- Remove the summoned target
 						for i, v in ipairs (LockPortDB) do
 							if v == name then
-								SendAddonMessage(MSG_PREFIX_REMOVE, name, "RAID")
+								SendAddonMessage(MSG_PREFIX_REMOVE, name, LockPort_GetAddonChannel())
 								table.remove(LockPortDB, i)
 								LockPort_UpdateList()
 							end
@@ -297,7 +305,7 @@ function LockPort_DoSummon(name,button)
 				end
 			else
 				DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : <" .. tostring(name) .. "> not found in party/raid. UnitID: " .. tostring(UnitID))
-				SendAddonMessage(MSG_PREFIX_REMOVE, name, "RAID")
+				SendAddonMessage(MSG_PREFIX_REMOVE, name, LockPort_GetAddonChannel())
 				LockPort_UpdateList()
 			end
 		else
@@ -306,7 +314,7 @@ function LockPort_DoSummon(name,button)
 	elseif button == "RightButton" then
 		for i, v in ipairs (LockPortDB) do
 			if v == name then
-				SendAddonMessage(MSG_PREFIX_REMOVE, name, "RAID")
+				SendAddonMessage(MSG_PREFIX_REMOVE, name, LockPort_GetAddonChannel())
 				table.remove(LockPortDB, i)
 				LockPort_UpdateList()
 			end
@@ -388,10 +396,11 @@ end
 function LockPort_SlashCommand(msg)
 	if msg == "help" then
 		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." usage:")
-		DEFAULT_CHAT_FRAME:AddMessage("/lockport { help  | summon | show | zone | whisper | shards | settings | sound | popup | say }")
+		DEFAULT_CHAT_FRAME:AddMessage("/lockport { help | summon | show | settings | debug | say }")
 		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9help|r: prints out this help")
 		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9summon|r: summons the next queued player, or targeted player")
 		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9show|r: shows the current summon list")
+		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9debug|r: toggles debug mode for range checking")
 		-- DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9zone|r: toggles zoneinfo")
 		-- DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9whisper|r: toggles the usage of /w")
 		-- DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9shards|r: toggles shards count when you summon")
@@ -420,6 +429,9 @@ function LockPort_SlashCommand(msg)
 		-- Opt_Buttons.SayCheckButton:Click()
 	elseif msg == "settings" then
 		LockPort_Settings_Toggle()
+	elseif msg == "debug" then
+		lockport_debug = not lockport_debug
+		DEFAULT_CHAT_FRAME:AddMessage(lockport_title .. " : Debug mode " .. (lockport_debug and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
 	else
 		LockPort_RequestFrame_Toggle()
 	end
@@ -493,29 +505,23 @@ function Check_TargetInRange()
    end
 end
 
--- SuperWoW / UnitXP Integration: Auto-remove players who come in range
--- UnitXP provides UnitXP("distanceBetween", ...) for distance calculation
--- SuperWoW provides UnitPosition(unitid) for friendly unit coordinates
+-- Auto-remove players who come in range
+-- Supports: UnitXP (best), SuperWoW, or vanilla CheckInteractDistance (fallback)
 local LOCKPORT_SUMMON_RANGE = 30  -- yards
 local lockport_checkInterval = 2  -- seconds between range checks
 local lockport_timeSinceLastCheck = 0
 
--- Check if a distance API is available (evaluated when needed, not at load time)
-local function LockPort_HasDistanceAPI()
-	return UnitXP ~= nil or SUPERWOW_VERSION ~= nil
-end
-
--- Calculate distance to a friendly unit using available API
--- Prefers UnitXP (cleaner API with built-in range calculation), falls back to SuperWoW
+-- Check if unit is in range using best available API
+-- Returns: distance in yards, or nil if cannot determine
 local function LockPort_GetDistance(unit)
 	if not UnitExists(unit) then return nil end
-	
-	-- Prefer UnitXP (cleaner API, "ranged" accounts for combat reach)
+
+	-- Prefer UnitXP (accurate distance)
 	if UnitXP then
 		local dist = UnitXP("distanceBetween", "player", unit, "ranged")
-		return dist
+		if dist then return dist end
 	end
-	
+
 	-- Fallback to SuperWoW
 	if SUPERWOW_VERSION and UnitPosition then
 		local x1, y1, z1 = UnitPosition("player")
@@ -524,53 +530,59 @@ local function LockPort_GetDistance(unit)
 			return ((x2 - x1)^2 + (y2 - y1)^2 + (z2 - z1)^2)^0.5
 		end
 	end
-	
+
+	-- Vanilla fallback: CheckInteractDistance (28 yards for index 4)
+	if CheckInteractDistance(unit, 4) then
+		return 28  -- Close enough, within summon range
+	end
+
 	return nil
 end
 
 -- Check all queued players and remove those who are now in range
 local function LockPort_CheckQueuedPlayersInRange()
 	if not LockPortOptions.auto_remove_in_range then return end
-	if not LockPort_HasDistanceAPI() then return end
 	if UnitAffectingCombat("player") then return end
 	if LockPort_null(LockPortDB) then return end
-	
+
 	local units = LockPort_GetGroupMembers()
 	if not units then return end
-	
+
 	-- Build name -> unit lookup
 	local nameToUnit = {}
 	for _, unit in ipairs(units) do
-		nameToUnit[unit.rName] = unit.rUnit
+		if unit.rName then
+			nameToUnit[unit.rName] = unit.rUnit
+		end
 	end
-	
+
 	local removedAny = false
-	-- Check each queued player (iterate backwards for safe removal)
 	for i = table.getn(LockPortDB), 1, -1 do
 		local name = LockPortDB[i]
 		local unitId = nameToUnit[name]
-		
+
 		if unitId then
 			local distance = LockPort_GetDistance(unitId)
+			if lockport_debug then
+				local distStr = distance and string.format("%.0f", distance) or "?"
+				DEFAULT_CHAT_FRAME:AddMessage(lockport_title .. " |cffff8800[DEBUG]|r " .. name .. ": " .. distStr .. "y")
+			end
 			if distance and distance <= LOCKPORT_SUMMON_RANGE then
-				SendAddonMessage(MSG_PREFIX_REMOVE, name, "RAID")
+				SendAddonMessage(MSG_PREFIX_REMOVE, name, LockPort_GetAddonChannel())
 				table.remove(LockPortDB, i)
 				DEFAULT_CHAT_FRAME:AddMessage(lockport_title .. " : <" .. name .. "> is now |cff00ff00in range|r - removed from queue")
 				removedAny = true
 			end
 		end
 	end
-	
+
 	if removedAny then
 		LockPort_UpdateList()
 	end
 end
 
--- OnUpdate handler for periodic range checking (only active with SuperWoW or UnitXP)
+-- OnUpdate handler for periodic range checking
 function LockPort_RangeCheck_OnUpdate()
-	if not LockPortOptions.auto_remove_in_range then return end
-	if not LockPort_HasDistanceAPI() then return end
-	
 	lockport_timeSinceLastCheck = lockport_timeSinceLastCheck + arg1
 	if lockport_timeSinceLastCheck >= lockport_checkInterval then
 		lockport_timeSinceLastCheck = 0

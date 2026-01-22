@@ -1,6 +1,6 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/">
 <script file="LockPort.lua"/>
-	<Frame name="LockPort_EventFrame" parent="UIParent" hidden="true">
+	<Frame name="LockPort_EventFrame" parent="UIParent">
 		<Scripts>
 			<OnLoad>
 				LockPort_EventFrame_OnLoad();
