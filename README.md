@@ -18,6 +18,10 @@
 - Type `/lockport summon` to fulfill the next pending summmon request via chatwindow or macro. Summons your target if there's no request.
 - You can set a keybind to do the same in the keybinds menu.
 
+## Auto-Remove In Range
+
+Players are automatically removed from the queue when they come within summon range. Works with vanilla client, SuperWoW, or UnitXP. Toggle this in `/lockport settings`.
+
 ## Options:
 
 - /lockport help - Shows commands in chat.
