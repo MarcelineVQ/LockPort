@@ -1,6 +1,8 @@
 local lockport_title = "|CFFB700B7L|CFFFF00FFo|CFFFF50FFc|CFFFF99FFk|CFFFFC4FFP|cffffffffort|r"
 local lockport_debug = false  -- toggle with /lockport debug
 
+local has_unitxp = pcall("UnitXP","nop","nop")
+
 BINDING_HEADER_LOCKPORT = lockport_title
 BINDING_NAME_SUMMON_KEY = "Summon next queue target"
 
@@ -493,33 +495,21 @@ function ItemLinkToName(link)
 	end
 end
 
--- Checks if the target is in range (28 yards)
-function Check_TargetInRange()
-   if not (GetUnitName("target")==nil) then
-       local t = UnitName("target")
-       if (CheckInteractDistance("target", 4)) then
-           return true
-       else
-           return false
-       end
-   end
-end
-
--- Auto-remove players who come in range
+-- Checks if a unit is in summon range
 -- Supports: UnitXP (best), SuperWoW, or vanilla CheckInteractDistance (fallback)
+-- Returns: inRange (boolean), distance (number or nil)
 local LOCKPORT_SUMMON_RANGE = 30  -- yards
-local lockport_checkInterval = 2  -- seconds between range checks
-local lockport_timeSinceLastCheck = 0
 
--- Check if unit is in range using best available API
--- Returns: distance in yards, or nil if cannot determine
-local function LockPort_GetDistance(unit)
-	if not UnitExists(unit) then return nil end
+function Check_TargetInRange(unit)
+	unit = unit or "target"
+	if not UnitExists(unit) then return false, nil end
 
 	-- Prefer UnitXP (accurate distance)
-	if UnitXP then
+	if has_unitxp then
 		local dist = UnitXP("distanceBetween", "player", unit, "ranged")
-		if dist then return dist end
+		if dist then
+			return dist <= LOCKPORT_SUMMON_RANGE, dist
+		end
 	end
 
 	-- Fallback to SuperWoW
@@ -527,17 +517,22 @@ local function LockPort_GetDistance(unit)
 		local x1, y1, z1 = UnitPosition("player")
 		local x2, y2, z2 = UnitPosition(unit)
 		if x1 and y1 and z1 and x2 and y2 and z2 then
-			return ((x2 - x1)^2 + (y2 - y1)^2 + (z2 - z1)^2)^0.5
+			local dist = ((x2 - x1)^2 + (y2 - y1)^2 + (z2 - z1)^2)^0.5
+			return dist <= LOCKPORT_SUMMON_RANGE, dist
 		end
 	end
 
 	-- Vanilla fallback: CheckInteractDistance (28 yards for index 4)
 	if CheckInteractDistance(unit, 4) then
-		return 28  -- Close enough, within summon range
+		return true, 28
 	end
 
-	return nil
+	return false, nil
 end
+
+-- Auto-remove players who come in range
+local lockport_checkInterval = 2  -- seconds between range checks
+local lockport_timeSinceLastCheck = 0
 
 -- Check all queued players and remove those who are now in range
 local function LockPort_CheckQueuedPlayersInRange()
@@ -562,12 +557,12 @@ local function LockPort_CheckQueuedPlayersInRange()
 		local unitId = nameToUnit[name]
 
 		if unitId then
-			local distance = LockPort_GetDistance(unitId)
+			local inRange, distance = Check_TargetInRange(unitId)
 			if lockport_debug then
 				local distStr = distance and string.format("%.0f", distance) or "?"
 				DEFAULT_CHAT_FRAME:AddMessage(lockport_title .. " |cffff8800[DEBUG]|r " .. name .. ": " .. distStr .. "y")
 			end
-			if distance and distance <= LOCKPORT_SUMMON_RANGE then
+			if inRange then
 				SendAddonMessage(MSG_PREFIX_REMOVE, name, LockPort_GetAddonChannel())
 				table.remove(LockPortDB, i)
 				DEFAULT_CHAT_FRAME:AddMessage(lockport_title .. " : <" .. name .. "> is now |cff00ff00in range|r - removed from queue")
