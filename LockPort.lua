@@ -563,7 +563,8 @@ local function LockPort_CheckQueuedPlayersInRange()
 				DEFAULT_CHAT_FRAME:AddMessage(lockport_title .. " |cffff8800[DEBUG]|r " .. name .. ": " .. distStr .. "y")
 			end
 			if inRange then
-				SendAddonMessage(MSG_PREFIX_REMOVE, name, LockPort_GetAddonChannel())
+				-- Only remove locally — don't broadcast, since other warlocks
+				-- check range from their own position independently
 				table.remove(LockPortDB, i)
 				DEFAULT_CHAT_FRAME:AddMessage(lockport_title .. " : <" .. name .. "> is now |cff00ff00in range|r - removed from queue")
 				removedAny = true
