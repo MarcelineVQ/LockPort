@@ -26,7 +26,38 @@ local LockPortOptions_DefaultSettings = {
 	on_portal       = true, -- custom message to post when portal appears
 	on_portal_text  = "Click the portal", -- custom message to post when portal appears
 	auto_remove_in_range = true, -- auto-remove players who come in range
+	keyword         = true, -- use the custom summon keyword below
+	keyword_text    = "123", -- what players type to request a summon
 }
+
+-- Chat types the client actually accepts in SendChatMessage(). Anything else
+-- (e.g. the "/s" that older configs saved) makes the announce fail silently.
+local LockPort_ChatTypes = {
+	SAY = true, YELL = true, PARTY = true, RAID = true, RAID_WARNING = true,
+	GUILD = true, OFFICER = true, WHISPER = true, EMOTE = true,
+}
+
+local LockPort_ChannelAliases = {
+	["s"] = "SAY", ["/s"] = "SAY", ["say"] = "SAY",
+	["y"] = "YELL", ["/y"] = "YELL", ["yell"] = "YELL",
+	["p"] = "PARTY", ["/p"] = "PARTY", ["party"] = "PARTY",
+	["ra"] = "RAID", ["/ra"] = "RAID", ["raid"] = "RAID",
+	["g"] = "GUILD", ["/g"] = "GUILD", ["guild"] = "GUILD",
+	["o"] = "OFFICER", ["/o"] = "OFFICER", ["officer"] = "OFFICER",
+}
+
+-- Turn a user supplied channel ("/s", "party", "RAID", ...) into a legal chat
+-- type. Unknown values fall back to SAY so the announce always goes out.
+local function LockPort_ResolveChatType(value)
+	if value == nil then return "SAY" end
+	local key = strlower(tostring(value))
+	key = string.gsub(key, "^%s+", "")
+	key = string.gsub(key, "%s+$", "")
+	if LockPort_ChannelAliases[key] then return LockPort_ChannelAliases[key] end
+	local upper = strupper(key)
+	if LockPort_ChatTypes[upper] then return upper end
+	return "SAY"
+end
 
 local Opts = {
 	{ name = "whisper",
@@ -60,7 +91,7 @@ local Opts = {
 		tooltip_title = "Starting Announce",
 		tooltip_text = "Announce starting a summon in specified channel.",
 		custom_box1 = true,
-		custom_box1_desc = "Channel to announce to, e.g. GUILD,SAY,YELL",
+		custom_box1_desc = "Channel to announce to: SAY, YELL, PARTY, RAID, GUILD (also accepts /s, /p, /ra, /g)",
 		custom_box1_text = "SAY",
 	  default = true, },
 	{ name = "on_portal",
@@ -75,6 +106,14 @@ local Opts = {
 		desc = "Auto-remove players when in range.",
 		tooltip_title = "Auto-Remove In Range",
 		tooltip_text = "Automatically remove queued players who come within summon range.",
+	  default = true, },
+	{ name = "keyword",
+		desc = "Custom summon keyword.",
+		tooltip_title = "Summon Keyword",
+		tooltip_text = "When enabled, players request a summon by typing the keyword in the box below (say, party, raid, yell or whisper).",
+		custom_box1 = true,
+		custom_box1_desc = "Type the keyword players should use, e.g. 123 or sum",
+		custom_box1_text = "123",
 	  default = true, },
 }
 
@@ -95,6 +134,9 @@ local function LockPort_Initialize()
 	end
 
 	LockPortOptions.prio = LockPortOptions.prio or {}
+
+	-- Older configs stored things like "/s" here, which SendChatMessage rejects.
+	LockPortOptions.say_text = LockPort_ResolveChatType(LockPortOptions.say_text)
 
 	local t = {}
 	for i,opt in pairs(Opts) do
@@ -136,10 +178,20 @@ function LockPort_EventFrame_OnEvent()
 		this:UnregisterEvent("VARIABLES_LOADED")
 		LockPort_Initialize()
 	elseif event == "CHAT_MSG_SAY" or event == "CHAT_MSG_PARTY" or event == "CHAT_MSG_RAID" or event == "CHAT_MSG_RAID_LEADER" or event == "CHAT_MSG_YELL" or event == "CHAT_MSG_WHISPER" then
-		-- if (string.find(arg1, "^123") and UnitClass("player")~=arg2) then
-		if string.find(arg1, "^%s*123") then
-			-- DEFAULT_CHAT_FRAME:AddMessage("CHAT_MSG")
-			SendAddonMessage(MSG_PREFIX_ADD, arg2, LockPort_GetAddonChannel())
+		-- Keyword is configurable in the settings window; empty falls back to 123.
+		local keyword = "123"
+		if LockPortOptions.keyword and LockPortOptions.keyword_text and LockPortOptions.keyword_text ~= "" then
+			keyword = tostring(LockPortOptions.keyword_text)
+			keyword = string.gsub(keyword, "^%s+", "")
+			keyword = string.gsub(keyword, "%s+$", "")
+		end
+		if keyword ~= "" then
+			-- Plain prefix compare after leading whitespace: no pattern magic,
+			-- so keywords like "1+2" or "sum%" behave literally.
+			local line = string.gsub(arg1 or "", "^%s*", "")
+			if string.sub(line, 1, string.len(keyword)) == keyword then
+				SendAddonMessage(MSG_PREFIX_ADD, arg2, LockPort_GetAddonChannel())
+			end
 		end
 	elseif event == "CHAT_MSG_ADDON" then
 		if arg1 == MSG_PREFIX_ADD then
@@ -190,7 +242,7 @@ end
 
 --GUI
 function LockPort_DoSummon(name,button)
-	local message, base_message, whisper_message, base_whisper_message, whisper_eviltwin_message, zone_message, subzone_message = ""
+	local message, base_message, whisper_message, base_whisper_message, whisper_eviltwin_message, zone_message, subzone_message, shards_message = ""
 	local bag,slot,texture,count = FindItem("Soul Shard")
 	local silithyst_buff = "Spell_Holiday_ToW_SpiceCloud"
 	-- local silithyst_buff = "Ability_Warrior_BattleShout" -- test
@@ -285,7 +337,12 @@ function LockPort_DoSummon(name,button)
 							message = message .. shards_message
 						end
 						if LockPortOptions.say then
-							SendChatMessage(message, LockPortOptions.say_text)
+							-- Guard the announce: a bad channel must never abort the
+							-- function before the whisper and queue cleanup below.
+							local say_ok, say_err = pcall(SendChatMessage, message, LockPort_ResolveChatType(LockPortOptions.say_text))
+							if not say_ok then
+								DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : announce failed: "..tostring(say_err))
+							end
 						end
 
 						-- Send Whisper Message
@@ -398,7 +455,7 @@ end
 function LockPort_SlashCommand(msg)
 	if msg == "help" then
 		DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." usage:")
-		DEFAULT_CHAT_FRAME:AddMessage("/lockport { help | summon | show | settings | debug | say }")
+		DEFAULT_CHAT_FRAME:AddMessage("/lockport { help | summon | show | keyword <text> | settings | debug | say }")
 		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9help|r: prints out this help")
 		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9summon|r: summons the next queued player, or targeted player")
 		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9show|r: shows the current summon list")
@@ -410,9 +467,21 @@ function LockPort_SlashCommand(msg)
 		-- DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9sound|r: toggles sound on summon request")
 		-- DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9popup|r: toggles summon window showing when a request is made")
 		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9say|r: toggles announcing the summmon in /say")
+		DEFAULT_CHAT_FRAME:AddMessage(" - |cff9482c9keyword|r: shows or sets the summon keyword (default 123)")
 		DEFAULT_CHAT_FRAME:AddMessage("To drag the frame use left mouse button")
 	elseif msg == "summon" then
 		LockPort_DirectSummon()
+	elseif msg == "keyword" or string.sub(msg, 1, 8) == "keyword " then
+		local kw = string.gsub(msg, "^keyword%s*", "")
+		kw = string.gsub(kw, "%s+$", "")
+		if kw == "" then
+			DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : current summon keyword is '"..tostring(LockPortOptions.keyword_text).."'")
+		else
+			LockPortOptions.keyword_text = kw
+			LockPortOptions.keyword = true
+			if Opt_Buttons.keyword then Opt_Buttons.keyword:SetChecked(1) end
+			DEFAULT_CHAT_FRAME:AddMessage(lockport_title.." : summon keyword set to '"..kw.."'")
+		end
 	elseif msg == "show" then
 		for i, v in ipairs(LockPortDB) do
 			DEFAULT_CHAT_FRAME:AddMessage(tostring(v))

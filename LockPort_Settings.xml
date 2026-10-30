@@ -2,7 +2,7 @@
 	<!-- settings frame -->
 	<Frame name="LockPort_SettingsFrame" frameStrata="DIALOG" toplevel="true" parent="UIParent" movable="true" enableMouse="true" hidden="true" clampedToScreen="true">
 		<Size>
-			<AbsDimension x="300" y="325"/>
+			<AbsDimension x="300" y="380"/>
 		</Size>
 		<Anchors>
 			<Anchor point="CENTER">
