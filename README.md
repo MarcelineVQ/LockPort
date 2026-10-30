@@ -7,7 +7,7 @@
 ## How it works:
 
 - You must be in a group.
-- If someone types 123 in Yell, Whisper, Party, Raid, or Raid Leader the Player name gets added to the LockPort list and is synced accros all LockPort users. Any user added to the list will also trigger a sound alert to let the Warlocks know someone is on the list.
+- If someone types the summon keyword (default `123`) in Yell, Whisper, Party, Raid, or Raid Leader the Player name gets added to the LockPort list and is synced accros all LockPort users. Any user added to the list will also trigger a sound alert to let the Warlocks know someone is on the list. Change the keyword in `/lockport settings`.
 - Type /lockport to show or hide the LockPort Window.
 - Left click to Summon.
 - CTRL + Left click to target the player.
@@ -26,6 +26,8 @@ Players are automatically removed from the queue when they come within summon ra
 
 - /lockport help - Shows commands in chat.
 - /lockport show - Shows the current summon list.
+- /lockport keyword - Shows the current summon keyword.
+- /lockport keyword <text> - Sets the summon keyword (e.g. `/lockport keyword sum`).
 - /lockport settings - Opens the settings window.
 
 ## To Do:
